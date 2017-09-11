@@ -55,6 +55,8 @@ class CricketBot:
         self.click = (zero[0]+270, zero[1]+277)
         self.image_path = image_path
         self.network_checkpoint = nwc
+        self.previous_digit = 0
+        self.current_digit = 0
 
     @staticmethod
     def grab_screen(area):
@@ -112,9 +114,12 @@ class CricketBot:
                 if y[0] == self.red[0] and y[1] == self.red[1] and y[2] == self.red[2]:
                     return True
 
+    def reward(self):
+        r = (self.current_digit - self.previous_digit % 10)
+        return r if 0 <= r else r + 10
+
     def start(self):
         print("bot... running...")
-        i = 0
         counter = 0
         loaded_graph = tf.Graph()
 
@@ -127,10 +132,6 @@ class CricketBot:
             keep_prob_tensor = loaded_graph.get_tensor_by_name("dropout/keep_prob:0")
 
             while True:
-                i += 1
-                if i % 250 == 0:
-                    print('frames:', i)
-
                 mtx = self.grab_screen((self.zero[0], self.zero[1],
                                         self.zero[0]+538, self.zero[1]+300))
                 score_mtx = mtx[22:45, 253:285]
@@ -139,6 +140,8 @@ class CricketBot:
 
                 if np.sum(possible_end[0:, 0, 0]) > 4250:
                     print('GAME OVER')
+                    self.previous_digit = 0
+                    self.current_digit = 0
                     time.sleep(5)
                     pyautogui.click(self.click)
                     time.sleep(2)
@@ -156,6 +159,10 @@ class CricketBot:
                     plt.imsave(arr=digit_mtx,
                                fname=f"{self.image_path}{digit}_{counter}.png",
                                cmap='gray')
+                    self.previous_digit = self.current_digit
+                    self.current_digit = digit
+                    print(digit)
+                    print('REWARD:', self.reward())
 
 if __name__ == "__main__":
     checkpoint = '../digit/convnet/convnet_checkpoint'
