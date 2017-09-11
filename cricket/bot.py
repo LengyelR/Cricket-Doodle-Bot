@@ -3,6 +3,7 @@ import win32gui
 import win32ui
 import win32con
 import os
+import time
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -51,7 +52,7 @@ class CricketBot:
     def __init__(self, zero, image_path, nwc):
         self.red = (34, 34, 187, 255)
         self.zero = zero
-        self.click = (zero[0]+278, zero[1]+274)
+        self.click = (zero[0]+270, zero[1]+277)
         self.image_path = image_path
         self.network_checkpoint = nwc
 
@@ -134,6 +135,13 @@ class CricketBot:
                                         self.zero[0]+538, self.zero[1]+300))
                 score_mtx = mtx[22:45, 253:285]
                 incoming_ball_mtx = mtx[187:210, 254:279]
+                possible_end = mtx[270:287, 210:230]
+
+                if np.sum(possible_end[0:, 0, 0]) > 4250:
+                    print('GAME OVER')
+                    time.sleep(5)
+                    pyautogui.click(self.click)
+                    time.sleep(2)
 
                 if self.ball_detected(incoming_ball_mtx):
                     pyautogui.click(self.click)
