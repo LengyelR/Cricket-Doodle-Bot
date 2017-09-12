@@ -86,8 +86,8 @@ class CricketBot:
                     return True
 
     def reward(self):
-        r = (self.current_digit - self.previous_digit % 10)
-        return r if 0 <= r else r + 10
+        r = (self.current_digit - self.previous_digit) % 10
+        return r
 
     def start(self):
         print("bot... running...")
