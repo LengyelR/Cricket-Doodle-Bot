@@ -91,7 +91,9 @@ class CricketBot:
 
     def start(self):
         print("bot... running...")
-        counter = 0
+        click_counter = 0
+        prev_frames = []
+        frames = []
         cn = model.LoadConvNet(self.network_checkpoint, 'fc2/y_conv_model', 'digit')
 
         while True:
@@ -100,6 +102,7 @@ class CricketBot:
             score_mtx = mtx[22:45, 253:285]
             incoming_ball_mtx = mtx[187:210, 254:279]
             possible_end = mtx[270:287, 210:230]
+            frames.append(incoming_ball_mtx)
 
             if np.sum(possible_end[0:, 0, 0]) > 4250:
                 print('GAME OVER')
@@ -111,30 +114,35 @@ class CricketBot:
 
             if self.ball_detected(incoming_ball_mtx):
                 pyautogui.click(self.click)
-
                 print('-'*25)
-                print('CLICK:', counter)
-                counter += 1
+                print('CLICK:', click_counter)
+                click_counter += 1
                 digit_mtx = self.preprocess(score_mtx)
 
                 res = cn.run(digit_mtx.reshape(1, 196))
                 digit = np.argmax(res)
-
-                plt.imsave(arr=digit_mtx,
-                           fname=f"{self.image_path}{digit}_{counter}.png",
-                           cmap='gray')
                 self.previous_digit = self.current_digit
                 self.current_digit = digit
+                r = self.reward()
+
+                for i, frame in enumerate(prev_frames):
+                    plt.imsave(arr=frame,
+                               fname=f"{self.image_path}{click_counter}_{i}_{r}.png",
+                               cmap='gray')
+
                 print('DIGIT:', digit)
-                print('REWARD:', self.reward())
+                print('REWARD:', r)
+                prev_frames = frames[-5:]
+                frames = []
+
 
 if __name__ == "__main__":
     checkpoint = '../digit/convnet/convnet_checkpoint'
     log = 'C:\\tmp\images\\game9\\'
     f = lambda x: Image.fromarray(x).show()
 
-    # top_left_game = (253, 208)
-    top_left_game = (253, 186)
+    top_left_game = (253, 208)
+    # top_left_game = (253, 186)
 
     bot = CricketBot(top_left_game, log, checkpoint)
     bot.start()
