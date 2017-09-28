@@ -4,18 +4,17 @@ import win32ui
 import win32con
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 import cricket.model as model
 from PIL import Image
 
 
 class CricketBot:
-    def __init__(self, zero, image_path, nwc):
+    def __init__(self, zero, image_path, model_dir):
         self.red = (34, 34, 187, 255)
         self.zero = zero
-        self.click = (zero[0]+270, zero[1]+277)
+        self.click = (zero[0] + 270, zero[1] + 277)
         self.image_path = image_path
-        self.network_checkpoint = nwc
+        self.model_directory = model_dir
         self.previous_digit = 0
         self.current_digit = 0
 
@@ -87,18 +86,27 @@ class CricketBot:
 
     def reward(self):
         r = (self.current_digit - self.previous_digit) % 10
-        return r
+
+        if r == 6:
+            return 1
+
+        elif r == 0:
+            return 0
+
+        else:
+            return -1
 
     def start(self):
         print("bot... running...")
         click_counter = 0
         prev_frames = []
         frames = []
-        cn = model.LoadConvNet(self.network_checkpoint, 'fc2/y_conv_model', 'digit')
+        cn = model.LoadConvNet(self.model_directory, 'fc2/y_conv_model', 'digit')
+        rewards = []
 
         while True:
             mtx = self.grab_screen((self.zero[0], self.zero[1],
-                                    self.zero[0]+538, self.zero[1]+300))
+                                    self.zero[0] + 538, self.zero[1] + 300))
             score_mtx = mtx[22:45, 253:285]
             incoming_ball_mtx = mtx[187:210, 254:279]
             possible_end = mtx[270:287, 210:230]
@@ -114,7 +122,7 @@ class CricketBot:
 
             if self.ball_detected(incoming_ball_mtx):
                 pyautogui.click(self.click)
-                print('-'*25)
+                print('-' * 25)
                 print('CLICK:', click_counter)
                 click_counter += 1
                 digit_mtx = self.preprocess(score_mtx)
@@ -125,15 +133,20 @@ class CricketBot:
                 self.current_digit = digit
                 r = self.reward()
 
-                for i, frame in enumerate(prev_frames):
-                    plt.imsave(arr=frame,
-                               fname=f"{self.image_path}{click_counter}_{i}_{r}.png",
-                               cmap='gray')
+                rewards.append((prev_frames, r))
 
                 print('DIGIT:', digit)
                 print('REWARD:', r)
                 prev_frames = frames[-5:]
                 frames = []
+            else:
+                rewards.append((prev_frames, 0))
+                prev_frames = frames[-5:]
+                frames = []
+
+            if not click_counter % 100:
+                # TODO: update
+                pass
 
 
 if __name__ == "__main__":
