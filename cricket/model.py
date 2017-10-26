@@ -1,4 +1,4 @@
-mport tensorflow as tf
+import tensorflow as tf
 
 
 class LoadModel:
@@ -43,14 +43,14 @@ class Policy:
             return tf.Variable(initial, name=name)
 
         with tf.name_scope('fc1'):
-            W1 = weight_variable([23 * 25 * 1, 100], 'w1')
-            b1 = bias_variable([100], 'b1')
+            W1 = weight_variable([23 * 25 * 1, 300], 'w1')
+            b1 = bias_variable([300], 'b1')
             h_fc1 = tf.nn.relu(tf.matmul(self.input, W1) + b1, name='h1')
 
         with tf.name_scope('softmax'):
-            W_fc2 = weight_variable([100, 2], 'fc2')
+            W_fc2 = weight_variable([300, 2], 'fc2')
             b2 = bias_variable([2], 'b2')
-            return tf.nn.softmax(tf.matmul(h_fc1, W_fc2)+b2)
+            return tf.nn.softmax(tf.matmul(h_fc1, W_fc2) + b2)
 
     def action(self):
         with tf.name_scope('output'):
