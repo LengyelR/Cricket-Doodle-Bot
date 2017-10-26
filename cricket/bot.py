@@ -136,38 +136,31 @@ class CricketBot:
     def train_with_bot(self):
         create_checkpoints_dir()
         tf.reset_default_graph()
+        cn = model.LoadModel(self.model_directory, 'fc2/y_conv_model', 'digit')
+        agent = model.Policy()
+
         batch_size = 1
         game_counter = 1
-        prev_frames = []
-        frames = []
-        cn = model.LoadModel(self.model_directory, 'fc2/y_conv_model', 'digit')
         s_history, a_history, r_history = [], [], []
-        agent = model.Policy()
-        saver = tf.train.Saver()
 
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             print("bot... running...")
             print('vars:', [var.eval() for var in agent.debug_all_var])
 
-            counter = 0
             while True:
-                counter += 1
                 mtx = self.grab_screen((self.zero[0], self.zero[1],
                                         self.zero[0] + 538, self.zero[1] + 300))
                 score_mtx = mtx[22:45, 253:285]
                 incoming_ball_mtx = mtx[187:210, 254:279]
                 possible_end = mtx[270:287, 210:230]
-                frames.append(incoming_ball_mtx)
 
                 if np.sum(possible_end[0:, 0, 0]) > 4250 \
                         or (self.previous_digit == 9 and self.current_digit == 9):
                     print('GAME OVER')
                     self.previous_digit = 0
                     self.current_digit = 0
-                    prev_frames = []
-                    frames = []
-
                     time.sleep(30)
                     pyautogui.click(self.click)
                     time.sleep(2)
@@ -186,27 +179,20 @@ class CricketBot:
                     self.current_digit = digit
                     r = self.reward()
 
-                    if len(prev_frames) == 5:
-                        s_history.append(self.preprocess_ball(prev_frames))
-                        a_history.append(1)
-                        r_history.append(r)
-                        # save_episode(prev_frames, 1, r, counter, game_counter-1)
+                    # mimic the bot's behaviour
+                    s_history.append(self.preprocess_ball([incoming_ball_mtx]))
+                    a_history.append(1)
+                    r_history.append(1.0)
 
                     print('DIGIT:', digit)
                     print('REWARD:', r)
-                    prev_frames = frames[-5:]
-                    frames = []
                     if game_counter % 25 == 0:
                         print('----------SAVE----------')
                         saver.save(sess, './' + checkpoints_dir + 'cricket_bot.ckpt')
                 else:
-                    if len(prev_frames) == 5:
-                        s_history.append(self.preprocess_ball(prev_frames))
-                        a_history.append(0)
-                        r_history.append(1.0)
-                        # save_episode(prev_frames, 0, 0.0, counter, game_counter)
-
-                    prev_frames = frames[-5:]
+                    s_history.append(self.preprocess_ball([incoming_ball_mtx]))
+                    a_history.append(0)
+                    r_history.append(1.0)
 
                 if batch_size % 10 == 0:
                     print('---------UPDATE---------')
@@ -219,37 +205,35 @@ class CricketBot:
                     print('loss:', loss)
                     with open(path.join(training_log, 'log.txt'), 'a') as logf:
                         logf.writelines(str(loss) + '\n')
-                    s_history, a_history, r_history = [], [], []
+
+                    s_history.clear()
+                    a_history.clear()
+                    r_history.clear()
                     batch_size = 1
 
     def run_policy(self):
-        frames = []
         policy = model.LoadModel('cricket', 'output/action', 'cricket_bot', dropout=False)
         while True:
             mtx = self.grab_screen((self.zero[0], self.zero[1],
                                     self.zero[0] + 538, self.zero[1] + 300))
             incoming_ball_mtx = mtx[187:210, 254:279]
             possible_end = mtx[270:287, 210:230]
-            frames.append(incoming_ball_mtx)
 
-            if len(frames) == 5:
-                state = self.preprocess_ball(frames)
-                action = policy.run([state])
-                print(action)
-                if action:
-                    pyautogui.click(self.click)
-                frames = []
+            state = self.preprocess_ball([incoming_ball_mtx])
+            action = policy.run([state])
+            if action:
+                print('CLICKED')
 
             if np.sum(possible_end[0:, 0, 0]) > 4250 \
                     or (self.previous_digit == 9 and self.current_digit == 9):
                 print('GAME OVER')
                 self.previous_digit = 0
                 self.current_digit = 0
-                frames = []
 
                 time.sleep(30)
                 pyautogui.click(self.click)
                 time.sleep(2)
+
 
 if __name__ == "__main__":
     checkpoint = '../digit/convnet/convnet_checkpoint'
