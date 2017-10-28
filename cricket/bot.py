@@ -23,15 +23,14 @@ def create_checkpoints_dir():
         os.makedirs(checkpoints_dir)
 
 
-def save_episode(frames, action, reward, counter, episode):
+def save_episode(frames, reward, game):
     for idx, mtx in enumerate(frames):
-        plt.imsave(arr=mtx,
+        mtx = np.array(mtx)
+        plt.imsave(arr=mtx.reshape(23, 25),
                    fname=path.join(training_log,
-                                   'e' + str(episode) +
-                                   'c' + str(counter) +
-                                   'i' + str(idx) +
-                                   '_action' + str(action) +
-                                   "_reward" + str(reward) + '.png'),
+                                   'R' + str(reward) +
+                                   '_G' + str(game) +
+                                   '_I' + str(idx) + '.png'),
                    cmap='gray')
 
 
@@ -75,6 +74,8 @@ class CricketBot:
         for mtx in frames:
             im = Image.fromarray(mtx)
             mtx = np.array(im.convert('L'))
+            mtx[-4:, :] = 255
+            mtx[mtx > 128] = 255
             mtx = (mtx - 255.0) / 255.0
             res.extend(mtx.reshape(23*25))
         return res
@@ -123,15 +124,7 @@ class CricketBot:
 
     def reward(self):
         r = (self.current_digit - self.previous_digit) % 10
-
-        if r == 6:
-            return 2.0
-
-        elif r == 0:
-            return 1.0
-
-        else:
-            return -1.0
+        return r
 
     def train_with_bot(self):
         create_checkpoints_dir()
@@ -184,6 +177,8 @@ class CricketBot:
                     a_history.append(1)
                     r_history.append(1.0)
 
+                    # save_episode(s_history[-5:], r, game_counter)
+
                     print('DIGIT:', digit)
                     print('REWARD:', r)
                     if game_counter % 25 == 0:
@@ -223,6 +218,7 @@ class CricketBot:
             action = policy.run([state])
             if action:
                 print('CLICKED')
+                print('-'*20)
 
             if np.sum(possible_end[0:, 0, 0]) > 4250 \
                     or (self.previous_digit == 9 and self.current_digit == 9):
