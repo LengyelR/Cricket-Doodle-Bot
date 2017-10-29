@@ -21,36 +21,83 @@ class LoadModel:
             return self.sess.run(self.output, feed_dict={self.input: data})
 
 
-class Policy:
-    def __init__(self):
-        self.input = tf.placeholder(tf.float32, shape=[None, 23 * 25 * 1], name='input_x')
-        self.actions = tf.placeholder(tf.int32)
-        self.rewards = tf.placeholder(tf.float32)
+class ConvolutionalNetwork:
+    def __init__(self, width, height, channels=1,
+                 conv1_map=5, conv1_features=32,
+                 conv2_map=8, conv2_features=64,
+                 fc_out=512, output_features=2):
+        self.input = tf.placeholder(tf.float32, [None, width * height], name="input_x")
+        self.width = width
+        self.height = height
+        self.channels = channels
+        self.conv1_features = conv1_features
+        self.conv1_map = conv1_map
+        self.conv2_features = conv2_features
+        self.conv2_map = conv2_map
+        self.fc_out = fc_out
+        self.output_features = output_features
 
-        self.y_ = self.build_model()
+        self.y_conv, self.keep_prob = self.network()
+
+    def network(self):
+        def conv2d(x_inner, w, name):
+            return tf.nn.conv2d(x_inner, w, strides=[1, 1, 1, 1], padding='SAME', name=name)
+
+        def max_pool_2x2(x_inner, name):
+            return tf.nn.max_pool(x_inner, ksize=[1, 2, 2, 1],
+                                  strides=[1, 2, 2, 1], padding='SAME', name=name)
+
+        def variable(shape, name):
+            return tf.get_variable(name, shape, initializer=tf.contrib.layers.xavier_initializer())
+
+        with tf.name_scope('reshape'):
+            x_reshaped = tf.reshape(self.input, [-1, self.width, self.height, self.channels])
+
+        with tf.name_scope('conv1'):
+            W_conv1 = variable([self.conv1_map, self.conv1_map, self.channels, self.conv1_features], 'w1')
+            b_conv1 = variable([self.conv1_features], 'b1')
+            h_conv1 = tf.nn.relu(conv2d(x_reshaped, W_conv1, 'conv1') + b_conv1)
+
+        with tf.name_scope('pool1'):
+            h_pool1 = max_pool_2x2(h_conv1, 'pool1')
+
+        with tf.name_scope('conv2'):
+            W_conv2 = variable([self.conv2_map, self.conv2_map, self.conv1_features, self.conv2_features], 'w2')
+            b_conv2 = variable([self.conv2_features], 'b2')
+            h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2, 'conv2') + b_conv2)
+
+        with tf.name_scope('pool2'):
+            h_pool2 = max_pool_2x2(h_conv2, 'pool2')
+
+        with tf.name_scope('fc1'):
+            flattened_shape = (self.width >> 2) * (self.height >> 2) * self.conv2_features
+            h_pool2_flat = tf.reshape(h_pool2, [-1, flattened_shape])
+
+            W_fc1 = variable([flattened_shape, self.fc_out], 'w3')
+            b_fc1 = variable([self.fc_out], 'b3')
+            h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+
+        with tf.name_scope('dropout'):
+            keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+            h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+        with tf.name_scope('fc2'):
+            W_fc2 = variable([self.fc_out, self.output_features], 'w4')
+            b_fc2 = variable([self.output_features], 'b4')
+            y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+        return y_conv, keep_prob
+
+
+class Policy(ConvolutionalNetwork):
+    def __init__(self, width, height):
+        super().__init__(width, height, conv2_features=32, fc_out=1024)
+        self.y_ = self.y_conv
+        self.actions = tf.placeholder(tf.int32, name='input_a')
+        self.rewards = tf.placeholder(tf.float32, name='input_r')
+
         self.opt, self.loss = self.optimiser()
         self.act = self.action()
         self.debug_all_var = tf.trainable_variables()
-
-    def build_model(self):
-        # TODO: baseclass
-        def weight_variable(shape, name):
-            initial = tf.truncated_normal(shape, stddev=0.1)
-            return tf.Variable(initial, name=name)
-
-        def bias_variable(shape, name):
-            initial = tf.constant(0.1, shape=shape)
-            return tf.Variable(initial, name=name)
-
-        with tf.name_scope('fc1'):
-            W1 = weight_variable([23 * 25 * 1, 300], 'w1')
-            b1 = bias_variable([300], 'b1')
-            h_fc1 = tf.nn.relu(tf.matmul(self.input, W1) + b1, name='h1')
-
-        with tf.name_scope('softmax'):
-            W_fc2 = weight_variable([300, 2], 'fc2')
-            b2 = bias_variable([2], 'b2')
-            return tf.nn.softmax(tf.matmul(h_fc1, W_fc2) + b2)
 
     def action(self):
         with tf.name_scope('output'):
@@ -62,6 +109,6 @@ class Policy:
             indices = tf.range(0, tf.shape(self.y_)[0]) * tf.shape(self.y_)[1] + self.actions
             chosen_action_probs = tf.gather(tf.reshape(self.y_, [-1]), indices)
             loss = -tf.reduce_mean(tf.log(chosen_action_probs) * self.rewards)
-        with tf.name_scope('opt'):
+        with tf.name_scope('adam'):
             optimiser = tf.train.AdamOptimizer(learning_rate=1e-4)
-            return optimiser.minimize(loss), loss
+            return optimiser.minimize(loss, name='opt'), loss
