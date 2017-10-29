@@ -112,3 +112,43 @@ class Policy(ConvolutionalNetwork):
         with tf.name_scope('adam'):
             optimiser = tf.train.AdamOptimizer(learning_rate=1e-4)
             return optimiser.minimize(loss, name='opt'), loss
+
+        
+if __name__ == '__main__':
+    import numpy as np
+    from tqdm import trange
+
+    N = 239
+
+    agent = Policy(40, 80)
+    with tf.Session() as sess:
+        actions_before_training = []
+        sess.run(tf.global_variables_initializer())
+        frames = [(np.random.randint(1, 255, 40 * 80) - 255.0) / 255.0 for _ in range(N)]
+
+        for frame in frames:
+            action = sess.run(agent.act, feed_dict={agent.input: [frame], agent.keep_prob: 1.0})
+            actions_before_training.append(action)
+            print(action)
+
+        rewards = np.random.choice([-1.0, 0.0, 1.0], N, p=[0.1, 0.5, 0.4])
+        actions = np.random.choice([0, 1], N, p=[0.9, 0.1])
+        print('vars:', [var.eval() for var in agent.debug_all_var])
+
+        print('-' * 25 + 'UPDATE' + '-' * 25)
+        for _ in trange(25):
+            sess.run(agent.opt, feed_dict={
+                agent.input: frames,
+                agent.rewards: rewards,
+                agent.actions: actions,
+                agent.keep_prob: 0.8
+            })
+
+        print('vars:', [var.eval() for var in agent.debug_all_var])
+        for frame, before, data, reward in zip(frames, actions_before_training, actions, rewards):
+            action = sess.run(agent.act, feed_dict={agent.input: [frame], agent.keep_prob: 1.0})
+            if action != before:
+                print('!!!!', end='')
+            else:
+                print('    ', end='')
+            print('before:', before, 'data:', data, 'model:', action, 'reward:', reward)
