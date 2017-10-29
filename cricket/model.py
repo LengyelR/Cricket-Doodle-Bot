@@ -1,4 +1,36 @@
 import tensorflow as tf
+import threading
+from os import path
+
+
+class UpdateThread(threading.Thread):
+    def __init__(self, sess, agent, input, actions, rewards, idx, logfolder):
+        threading.Thread.__init__(self)
+        self.sess = sess
+        self.agent = agent
+        self.input = input
+        self.actions = actions
+        self.rewards = rewards
+        self.idx = idx
+        self.logfolder = logfolder
+
+    def run(self):
+        name = 'thread:' + str(self.idx)
+        print('---------UPDATE---------')
+        print(name, "running")
+        if threading.active_count() > 2:
+            raise Exception('previous thread is still running!')
+
+        feed_dict = {self.agent.input: self.input,
+                     self.agent.actions: self.actions,
+                     self.agent.rewards: self.rewards,
+                     self.agent.keep_prob: 0.8}
+        self.sess.run(self.agent.opt, feed_dict=feed_dict)
+        loss = self.sess.run(self.agent.loss, feed_dict=feed_dict)
+        print('loss:', loss)
+        with open(path.join(self.logfolder, 'log.txt'), 'a') as logf:
+            logf.writelines(str(loss) + '\n')
+        print(name, 'finished')
 
 
 class LoadModel:
@@ -90,7 +122,7 @@ class ConvolutionalNetwork:
 
 class Policy(ConvolutionalNetwork):
     def __init__(self, width, height):
-        super().__init__(width, height, conv2_features=32, fc_out=1024)
+        super().__init__(width, height, conv1_features=16, conv2_features=32, fc_out=100)
         self.y_ = self.y_conv
         self.actions = tf.placeholder(tf.int32, name='input_a')
         self.rewards = tf.placeholder(tf.float32, name='input_r')
@@ -113,14 +145,16 @@ class Policy(ConvolutionalNetwork):
             optimiser = tf.train.AdamOptimizer(learning_rate=1e-4)
             return optimiser.minimize(loss, name='opt'), loss
 
-        
+
 if __name__ == '__main__':
     import numpy as np
     from tqdm import trange
 
     N = 239
-
+    tf.reset_default_graph()
     agent = Policy(40, 80)
+    saver = tf.train.Saver()
+
     with tf.Session() as sess:
         actions_before_training = []
         sess.run(tf.global_variables_initializer())
