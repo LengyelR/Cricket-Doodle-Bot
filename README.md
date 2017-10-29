@@ -1,5 +1,6 @@
 # Cricket-Doodle-Bot
 
-A simple bot with pyautogui. It reaches the maximum score (999).
+Learning off-policy, just by watching a simple bot play. Using a policy gradient algorithm, it can learn to play the game in a few hours.
+
 
 <img src="https://github.com/LengyelR/Cricket-Doodle-Bot/blob/master/highscore.jpg" width="640">
